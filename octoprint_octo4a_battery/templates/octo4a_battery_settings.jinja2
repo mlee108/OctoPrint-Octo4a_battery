@@ -1,22 +1,46 @@
 <form class="form-horizontal">
     <div class="control-group">
-        <label class="control-label">{{ _('batteryLevelPath') }}</label>
+        <h3>General Settings</h3>
+        <label class="control-label">{{ _('Battery Level Path') }}</label>
         <div class="controls">
             <input type="text" class="input-block-level" data-bind="value: settings.plugins.octo4a_battery.batteryLevelPath">
         </div>
-    </div>
-    <div class="control-group">
-        <label class="control-label">{{ _('enable telegram') }}</label>
+        <br>
+        <label class="control-label">{{ _('Notification Threshold') }}</label>
+        <div class="controls">
+            <input type="number" class="input-mini text-right" data-bind="value: settings.plugins.octo4a_battery.notificationThreshold">
+        </div>
+        <br>
+        <label class="control-label">{{ _('Notification Frequency') }}</label>
+        <div class="controls">
+            <input type="number" class="input-mini text-right" data-bind="value: settings.plugins.octo4a_battery.notificationFrequency">
+        </div>
+
+        <h3>Telegram Notification Settings</h3>
+        <label class="control-label">{{ _('Enable Telegram') }}</label>
         <div class="controls">
             <input type="checkbox" class="input-block-level" data-bind="checked: settings.plugins.octo4a_battery.telegramEnabled">
         </div>
-        <label class="control-label">{{ _('telegram bot token') }}</label>
+        <br>
+        <label class="control-label">{{ _('Telegram Bot Token') }}</label>
         <div class="controls">
-            <input type="text" class="input-block-level" data-bind="value: settings.plugins.octo4a_battery.telegramBotToken">
+            <input type="text" class="input-block-level" data-bind="value: settings.plugins.octo4a_battery.telegramBotToken, enable: settings.plugins.octo4a_battery.telegramEnabled()" disabled">
         </div>
-        <label class="control-label">{{ _('telegram chat id') }}</label>
+        <br>
+        <label class="control-label">{{ _('Telegram Chat Id') }}</label>
         <div class="controls">
-            <input type="text" class="input-block-level" data-bind="value: settings.plugins.octo4a_battery.telegramChatID">
+            <input type="text" class="input-block-level" data-bind="value: settings.plugins.octo4a_battery.telegramChatID, enable: settings.plugins.octo4a_battery.telegramEnabled()" disabled">
+        </div>
+
+        <h3>Discord Notification Settings</h3>
+        <label class="control-label">{{ _('Enable Discord') }}</label>
+        <div class="controls">
+            <input type="checkbox" class="input-block-level" data-bind="checked: settings.plugins.octo4a_battery.discordEnabled">
+        </div>
+        <br>
+        <label class="control-label">{{ _('Discord Webhook URL') }}</label>
+        <div class="controls">
+            <input type="text" class="input-block-level" data-bind="value: settings.plugins.octo4a_battery.discordWebHook, enable: settings.plugins.octo4a_battery.discordEnabled()" disabled">
         </div>
     </div>
 </form>

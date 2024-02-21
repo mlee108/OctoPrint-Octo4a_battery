@@ -1,11 +1,8 @@
 # coding=utf-8
-from __future__ import absolute_import
-import requests
-
-from octoprint.util import RepeatedTimer
-
-
 import octoprint.plugin
+import requests
+from __future__ import absolute_import
+from octoprint.util import RepeatedTimer
 
 class Octo4a_batteryPlugin(octoprint.plugin.SettingsPlugin,
     octoprint.plugin.AssetPlugin,
@@ -17,69 +14,63 @@ class Octo4a_batteryPlugin(octoprint.plugin.SettingsPlugin,
         # Array of raspberry pi SoC's to check against, saves having a large if/then statement later
         self._checkBatteryTimer = None
         self._batteryLevel = 100
-        self._lastWarningSent = 100
+        self._nextThreshold = 100
 
     def on_after_startup(self):
         self._logger.info(f'Hello World! (more: {self._settings.get(["batteryLevelPath"])}, "telegram enabled: {self._settings.get(["telegramEnabled"])}')
+        self._nextThreshold = self._settings.get(["notificationThreshold"])
         self.start_custom_timer(5)
-
 
     def start_custom_timer(self, interval):
         self._checkBatteryTimer = RepeatedTimer(interval, self.update_battery, run_first=True)
         self._checkBatteryTimer.start()
 
-    def check_warning_threshold(self, newValue):
-        if self._settings.get(["telegramEnabled"]) == False:
-            return
-        self._logger.debug("\n\ncheck_warning_threshold %s", newValue)
-        thresholdHit = 0
-        alarmThresholds = [ 5, 15, 25, 35 ]
-        for threshold in alarmThresholds:
-            if int(newValue) < threshold:
-                self._logger.debug("threshold hit %s", threshold)
-                thresholdHit = 1
-                if self._lastWarningSent <= threshold:
-                    self._logger.debug("self._lastWarningSent %i <= threshold: %i" , self._lastWarningSent, threshold)
-                    continue
-                self.send_telegram_alarm(newValue,threshold)
-                self._logger.debug("send_telegram_alarm: %i" ,threshold)
-                self._lastWarningSent = threshold
-                break
-            if int(newValue) >= self._lastWarningSent:
-                # the new value is above the last hit threshold ... battery level is rising?
-                self._logger.debug("int(newValue) %s > self._lastWarningSent %i" , newValue, self._lastWarningSent)
-                self._lastWarningSent = threshold+1
-        if thresholdHit == 0:
-            # threshold no longer hit ... this must mean the battery level is back up, reset warnings
-            self._lastWarningSent = 100
-            self._logger.debug("thresholdHit == 0:" )
-    
-
-    def send_telegram_alarm(self, value, threshold):
-        url = f'https://api.telegram.org/bot{self._settings.get(["telegramBotToken"])}/sendMessage'
-        myobj = {'chat_id':self._settings.get(["telegramChatID"]),'text':f'🚨Warning🚨 Battery Level is below { threshold}% (Battery Level: {value}%)'}
-
-        x = requests.post(url, json = myobj)
-
     def update_battery(self):
-
         try:
             path = self._settings.get(["batteryLevelPath"])
             f = open(path, "r")
             self._batteryLevel = f.read().strip()
         except:
-            self._batteryLevel = "invalid path"; 
+            self._batteryLevel = "invalid path";
         # self._batteryLevelTmp -= 1
-        batteryStatus = "Full"
-        self._logger.debug("match: level: %s" % self._batteryLevel)
-        self._plugin_manager.send_plugin_message(self._identifier,
-                                                 dict(batteryLevel=self._batteryLevel,batteryStatus=batteryStatus))
-        self.check_warning_threshold(self._batteryLevel)
+        batteryStatus = "" #"Full"
+        # self._logger.debug("match: level: %s" % self._batteryLevel)
+        self._plugin_manager.send_plugin_message(self._identifier, dict(batteryLevel=self._batteryLevel))
+
+        if not self._settings.get(["telegramEnabled"]) or not self._settings.get(["discordEnabled"]):
+            self.check_warning_threshold(self._batteryLevel)
+
+    def check_warning_threshold(self, newValue):
+        self._logger.debug("check_warning_threshold: curent battery level: %s next alert level: %s", newValue, self._nextThreshold)
+        newValue = int(newValue)
+        if newValue <= self._nextThreshold:
+            if self._settings.get(["telegramEnabled"]):
+                self._logger.debug("check_warning_threshold: telegram message sent")
+                self.send_telegram_alarm(newValue, self._nextThreshold)
+            if self._settings.get(["discordEnabled"]):
+                self._logger.debug("check_warning_threshold: discord message sent")
+                # self.send_discord_alarm(newValue, self._nextThreshold)
+            self._nextThreshold -= self._settings.get(["notificationFrequency"])
+        elif newValue > self._settings.get(["notificationThreshold"]):
+            self._logger.debug("check_warning_threshold: reset notification alert threshold")
+            self._nextThreshold = self._settings.get(["notificationThreshold"])
+
+    def send_telegram_alarm(self, value, threshold):
+        url = f'https://api.telegram.org/bot{self._settings.get(["telegramBotToken"])}/sendMessage'
+        myobj = {'chat_id':self._settings.get(["telegramChatID"]),'text':f'🚨Warning🚨 Battery Level is below {threshold}% (Battery Level: {value}%)'}
+
+        x = requests.post(url, json = myobj)
+
+    def send_discord_alarm(self, value, threshold):
+        print("todo")
+        # todo -- figure out discord webhooks
 
     ##~~ SettingsPlugin mixin
 
     def get_settings_defaults(self):
-        return dict(batteryLevelPath="/sys/class/power_supply/battery/capacity", telegramBotToken="Token" , telegramChatID="chatID", telegramEnabled = 0)
+        return dict(batteryLevelPath="/sys/class/power_supply/battery/capacity", notificationThreshold=35, notificationFrequency=10,
+            telegramEnabled = 0, telegramBotToken="Token" , telegramChatID="chatID",
+            discordEnabled=0)
 
 
     def get_template_configs(self):
@@ -119,14 +110,14 @@ class Octo4a_batteryPlugin(octoprint.plugin.SettingsPlugin,
                 "pip": "https://github.com/tobiasgraf/OctoPrint-Octo4a_battery/archive/{target_version}.zip",
             }
         }
-        
 
 
-    def get_template_vars(self):
-        return dict(batteryLevelPath=self._settings.get(["batteryLevelPath"]),
-                    telegramBotToken=self._settings.get(["telegramBotToken"]),
-                    telegramChatID=self._settings.get(["telegramChatID"]),
-                    telegramEnabled=self._settings.get(["telegramEnabled"]))
+
+    # def get_template_vars(self):
+    #     return dict(batteryLevelPath=self._settings.get(["batteryLevelPath"]),
+    #                 telegramBotToken=self._settings.get(["telegramBotToken"]),
+    #                 telegramChatID=self._settings.get(["telegramChatID"]),
+    #                 telegramEnabled=self._settings.get(["telegramEnabled"]))
 
 # If you want your plugin to be registered within OctoPrint under a different name than what you defined in setup.py
 # ("OctoPrint-PluginSkeleton"), you may define that here. Same goes for the other metadata derived from setup.py that
@@ -147,4 +138,3 @@ def __plugin_load__():
     __plugin_hooks__ = {
         "octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information
     }
-
