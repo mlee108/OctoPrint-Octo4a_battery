@@ -1,7 +1,6 @@
 # coding=utf-8
 import octoprint.plugin
 import requests
-from __future__ import absolute_import
 from octoprint.util import RepeatedTimer
 
 class Octo4a_batteryPlugin(octoprint.plugin.SettingsPlugin,
@@ -33,14 +32,16 @@ class Octo4a_batteryPlugin(octoprint.plugin.SettingsPlugin,
         except:
             self._batteryLevel = "invalid path";
         # self._batteryLevelTmp -= 1
-        batteryStatus = "" #"Full"
+        # batteryStatus = "" #"Full"
         # self._logger.debug("match: level: %s" % self._batteryLevel)
         self._plugin_manager.send_plugin_message(self._identifier, dict(batteryLevel=self._batteryLevel))
 
-        if not self._settings.get(["telegramEnabled"]) or not self._settings.get(["discordEnabled"]):
-            self.check_warning_threshold(self._batteryLevel)
+        self.check_warning_threshold(self._batteryLevel)
 
     def check_warning_threshold(self, newValue):
+        if not self._settings.get(["telegramEnabled"]) and not self._settings.get(["discordEnabled"]):
+            return
+
         self._logger.debug("check_warning_threshold: curent battery level: %s next alert level: %s", newValue, self._nextThreshold)
         newValue = int(newValue)
         if newValue <= self._nextThreshold:
@@ -49,8 +50,11 @@ class Octo4a_batteryPlugin(octoprint.plugin.SettingsPlugin,
                 self.send_telegram_alarm(newValue, self._nextThreshold)
             if self._settings.get(["discordEnabled"]):
                 self._logger.debug("check_warning_threshold: discord message sent")
-                # self.send_discord_alarm(newValue, self._nextThreshold)
-            self._nextThreshold -= self._settings.get(["notificationFrequency"])
+                self.send_discord_alarm(newValue, self._nextThreshold)
+
+            while newValue <= self._nextThreshold:
+                self._nextThreshold -= self._settings.get(["notificationFrequency"])
+
         elif newValue > self._settings.get(["notificationThreshold"]):
             self._logger.debug("check_warning_threshold: reset notification alert threshold")
             self._nextThreshold = self._settings.get(["notificationThreshold"])
@@ -62,8 +66,11 @@ class Octo4a_batteryPlugin(octoprint.plugin.SettingsPlugin,
         x = requests.post(url, json = myobj)
 
     def send_discord_alarm(self, value, threshold):
-        print("todo")
-        # todo -- figure out discord webhooks
+        payload = {
+            'content': f'🚨Warning🚨 Battery Level is below {threshold}% (Battery Level: {value}%)'
+        }
+
+        requests.post(self._settings.get(["discordWebHook"]), json=payload)
 
     ##~~ SettingsPlugin mixin
 
